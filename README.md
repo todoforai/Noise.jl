@@ -10,6 +10,9 @@ Port of [noise-zig](../noise-zig), which itself follows the [noise-c](../benchma
 
 Fully implemented and tested.
 
+The codebase also includes some static-compilation-oriented design choices.
+For example, `src/types.jl` avoids `Union{Nothing, ...}` in a few places to stay friendlier to `StaticCompiler.jl`.
+
 - X25519 DH (libsodium), ChaCha20-Poly1305 AEAD (libsodium), BLAKE2s-256 (pure Julia), HMAC-BLAKE2s, HKDF
 - `CipherState`, `SymmetricState`, `HandshakeState`, `TransportState`
 - All four patterns: `IK`, `KK`, `XX`, `NX`
