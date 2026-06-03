@@ -6,29 +6,29 @@ bytes(s::String) = Vector{UInt8}(codeunits(s))
 
 # ─── Crypto tests (matching noise-zig crypto.zig tests) ─────────────────────
 
-@testset "BLAKE2s known vector" begin
-    # BLAKE2s-256("") from RFC 7693 / reference
-    h = Noise.blake2s_hash(UInt8[])
-    @test length(h) == 32
-    @test h != zeros(UInt8, 32)
+@testset "BLAKE2b known vector" begin
+    # BLAKE2b-512("") from RFC 7693
+    h = Noise.blake2b_hash(UInt8[])
+    @test length(h) == 64
+    @test h != zeros(UInt8, 64)
 end
 
-@testset "hkdf2 returns two 32-byte outputs" begin
-    r = Noise.hkdf2(fill(UInt8(1), 32), bytes("abc"))
-    @test length(r.out1) == 32
-    @test length(r.out2) == 32
-    @test r.out1 != zeros(UInt8, 32)
-    @test r.out2 != zeros(UInt8, 32)
+@testset "hkdf2 returns two 64-byte outputs" begin
+    r = Noise.hkdf2(fill(UInt8(1), 64), bytes("abc"))
+    @test length(r.out1) == 64
+    @test length(r.out2) == 64
+    @test r.out1 != zeros(UInt8, 64)
+    @test r.out2 != zeros(UInt8, 64)
 end
 
-@testset "hkdf3 returns three 32-byte outputs" begin
-    r = Noise.hkdf3(fill(UInt8(2), 32), bytes("abc"))
-    @test length(r.out1) == 32
-    @test length(r.out2) == 32
-    @test length(r.out3) == 32
-    @test r.out1 != zeros(UInt8, 32)
-    @test r.out2 != zeros(UInt8, 32)
-    @test r.out3 != zeros(UInt8, 32)
+@testset "hkdf3 returns three 64-byte outputs" begin
+    r = Noise.hkdf3(fill(UInt8(2), 64), bytes("abc"))
+    @test length(r.out1) == 64
+    @test length(r.out2) == 64
+    @test length(r.out3) == 64
+    @test r.out1 != zeros(UInt8, 64)
+    @test r.out2 != zeros(UInt8, 64)
+    @test r.out3 != zeros(UInt8, 64)
 end
 
 # ─── CipherState tests (matching noise-zig cipher_state.zig tests) ──────────
@@ -57,27 +57,27 @@ end
 # ─── SymmetricState tests (matching noise-zig symmetric_state.zig tests) ─────
 
 @testset "symmetric state initializes h and ck from short protocol name" begin
-    ss = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2s")
+    ss = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2b")
     @test ss.ck == ss.h
 end
 
 @testset "mixHash changes h" begin
-    ss = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2s")
+    ss = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2b")
     before = copy(ss.h)
     Noise.mix_hash!(ss, bytes("abc"))
     @test before != ss.h
 end
 
 @testset "mixKey enables encryption" begin
-    ss = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2s")
+    ss = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2b")
     @test !Noise.has_key(ss.cipher)
     Noise.mix_key!(ss, bytes("abc"))
     @test Noise.has_key(ss.cipher)
 end
 
 @testset "encryptAndHash roundtrips after mixKey" begin
-    a = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2s")
-    b = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2s")
+    a = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2b")
+    b = Noise.symmetric_state_init("Noise_XX_25519_ChaChaPoly_BLAKE2b")
     Noise.mix_key!(a, bytes("shared secret"))
     Noise.mix_key!(b, bytes("shared secret"))
     ct = Noise.encrypt_and_hash!(a, bytes("hello"))
@@ -211,3 +211,55 @@ end
 @testset "NX handshake roundtrips" begin roundtrip_handshake(nx) end
 @testset "IK handshake roundtrips" begin roundtrip_handshake(ik) end
 @testset "KK handshake roundtrips" begin roundtrip_handshake(kk) end
+
+# ─── Cross-implementation interop vector ────────────────────────────────────
+# Same fixture consumed by noise-zig/src/interop_test.zig and
+# todoforai-c-core/noise/test_vector_nx.json.
+
+hex(s::String) = Vector{UInt8}(hex2bytes(s))
+
+@testset "Noise_NX_BLAKE2b interop vector" begin
+    I_E_PUB  = hex("a4e09292b651c278b9772c569f5fa9bb13d906b46ab68c9df9dc2b4409f8a209")
+    R_S_PUB  = hex("ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59")
+    R_S_PRIV = NTuple{32,UInt8}(hex("0202020202020202020202020202020202020202020202020202020202020202"))
+    R_E_PRIV = NTuple{32,UInt8}(hex("0303030303030303030303030303030303030303030303030303030303030303"))
+    R_E_PUB  = hex("5dfedd3b6bd47f6fa28ee15d969d5bb0ea53774d488bdaf9df1c6e0124b3ef22")
+    EXP_H    = hex("60456adc43864da532bfb6fc17d81798c87ddb9a1174ddffa2ed5380fc0cd34cf7518d337c5ecac0c41a4caaf1b5480344e3395fcec1f3ae8dd8e6a2c594f425")
+    EXP_CK   = hex("575db4282c1573b3ac5aa64eea404f1ede78438b5604285d617c9ff69af77336217d957a52f0139ef9e0b5965d4741c2df7ba74ff84abae15fa2ab1f34d3af05")
+    EXP_K_I2R = hex("661e6648886a7bc3b3aefaafff70c1557806c5f515fff608bb2ddbe8b1cd3f6b")
+    EXP_K_R2I = hex("1fa3239cd269cb397fe050752a88901b704add45a77d44da155d16c64784dbf2")
+    EXP_CT    = hex("5cb416d11148b739af724cb50da19b6a1a6c3d5da7")
+
+    I_E_PUB_T = NTuple{32,UInt8}(I_E_PUB)
+
+    # Replay responder-side NX symmetric transitions.
+    ss = Noise.symmetric_state_init("Noise_NX_25519_ChaChaPoly_BLAKE2b")
+    Noise.mix_hash!(ss, UInt8[])      # prologue = []
+    Noise.mix_hash!(ss, I_E_PUB)       # msg0: [e]
+    Noise.mix_hash!(ss, R_E_PUB)       # msg1: e
+
+    # ee: DH(R_E_PRIV, I_E_PUB)
+    ee = Noise.x25519_dh(R_E_PRIV, I_E_PUB_T)
+    Noise.mix_key!(ss, ee)
+
+    # s: encrypt R_S_PUB under current key, AD = h
+    Noise.encrypt_and_hash!(ss, R_S_PUB)
+
+    # es: DH(R_S_PRIV, I_E_PUB)
+    es = Noise.x25519_dh(R_S_PRIV, I_E_PUB_T)
+    Noise.mix_key!(ss, es)
+
+    # empty payload
+    Noise.encrypt_and_hash!(ss, UInt8[])
+
+    @test collect(ss.h)  == EXP_H
+    @test collect(ss.ck) == EXP_CK
+
+    pair = Noise.symmetric_split(ss)
+    @test collect(pair.initiator.key) == EXP_K_I2R
+    @test collect(pair.responder.key) == EXP_K_R2I
+
+    # Transport: initiator sends "hello" under k_i2r with nonce=0, empty AD.
+    ct = Noise.encrypt_with_ad!(pair.initiator, UInt8[], bytes("hello"))
+    @test ct == EXP_CT
+end

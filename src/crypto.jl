@@ -1,96 +1,95 @@
 # Crypto primitives matching noise-zig/src/crypto.zig
-# BLAKE2s-256: via BLAKE2.jl (MVector-based, static-friendly)
+# BLAKE2b-512: via BLAKE2.jl (MVector-based, static-friendly)
 # X25519, ChaCha20-Poly1305: via Crypto25519.jl (MVector-based, static-friendly)
 
-using BLAKE2: Blake2sContext, update!, digest!
+using BLAKE2: Blake2bContext, update!, digest!
 using Crypto25519: x25519_scalar_mult!, chacha20_poly1305_encrypt!, chacha20_poly1305_decrypt!
 using Random: RandomDevice, rand!
 
-# ─── BLAKE2s-256 ─────────────────────────────────────────────────────────────
+# ─── BLAKE2b-512 ─────────────────────────────────────────────────────────────
 
-const BLAKE2S_BLOCKBYTES = 64
-const BLAKE2S_OUTBYTES = 32
+const BLAKE2B_BLOCKBYTES = 128
+const BLAKE2B_OUTBYTES = 64
 
-"""Hash data with BLAKE2s-256 into caller-provided MVector{32}."""
-function blake2s_hash!(out::MVector{32, UInt8}, data::AbstractVector{UInt8})
-    ctx = Blake2sContext()
+"""Hash data with BLAKE2b-512 into caller-provided MVector{64}."""
+function blake2b_hash!(out::MVector{64, UInt8}, data::AbstractVector{UInt8})
+    ctx = Blake2bContext()
     update!(ctx, data)
     digest!(out, ctx)
 end
 
-"""Hash data with BLAKE2s-256, returns MVector{32, UInt8}."""
-function blake2s_hash(data::AbstractVector{UInt8})::MVector{32, UInt8}
-    out = MVector{32, UInt8}(undef)
-    blake2s_hash!(out, data)
+"""Hash data with BLAKE2b-512, returns MVector{64, UInt8}."""
+function blake2b_hash(data::AbstractVector{UInt8})::MVector{64, UInt8}
+    out = MVector{64, UInt8}(undef)
+    blake2b_hash!(out, data)
     out
 end
 
-# ─── HMAC-BLAKE2s ────────────────────────────────────────────────────────────
+# ─── HMAC-BLAKE2b ────────────────────────────────────────────────────────────
 # Matches noise-c hashstate.c noise_hashstate_hmac and noise-zig crypto.zig Hmac
 
-function hmac_blake2s!(out::MVector{32, UInt8}, key::AbstractVector{UInt8},
+function hmac_blake2b!(out::MVector{64, UInt8}, key::AbstractVector{UInt8},
                        data::AbstractVector{UInt8})
-    block_len = BLAKE2S_BLOCKBYTES
-    key_block = MVector{64, UInt8}(undef)
+    block_len = BLAKE2B_BLOCKBYTES
+    key_block = MVector{128, UInt8}(undef)
 
     if length(key) <= block_len
         @inbounds for i in 1:length(key); key_block[i] = key[i]; end
         @inbounds for i in (length(key)+1):block_len; key_block[i] = 0x00; end
     else
-        h = blake2s_hash(key)
-        @inbounds for i in 1:BLAKE2S_OUTBYTES; key_block[i] = h[i]; end
-        @inbounds for i in (BLAKE2S_OUTBYTES+1):block_len; key_block[i] = 0x00; end
+        h = blake2b_hash(key)
+        @inbounds for i in 1:BLAKE2B_OUTBYTES; key_block[i] = h[i]; end
+        @inbounds for i in (BLAKE2B_OUTBYTES+1):block_len; key_block[i] = 0x00; end
     end
 
     # Inner hash: H((key ⊻ ipad) || data)
-    ipad = MVector{64, UInt8}(undef)
+    ipad = MVector{128, UInt8}(undef)
     @inbounds for i in 1:block_len; ipad[i] = key_block[i] ⊻ 0x36; end
-    ctx = Blake2sContext()
+    ctx = Blake2bContext()
     update!(ctx, ipad)
     update!(ctx, data)
-    inner = MVector{32, UInt8}(undef)
+    inner = MVector{64, UInt8}(undef)
     digest!(inner, ctx)
 
     # Outer hash: H((key ⊻ opad) || inner)
-    opad = MVector{64, UInt8}(undef)
+    opad = MVector{128, UInt8}(undef)
     @inbounds for i in 1:block_len; opad[i] = key_block[i] ⊻ 0x5c; end
-    ctx = Blake2sContext()
+    ctx = Blake2bContext()
     update!(ctx, opad)
     update!(ctx, inner)
     digest!(out, ctx)
 end
 
-function hmac_blake2s(key::AbstractVector{UInt8}, data::AbstractVector{UInt8})::MVector{32, UInt8}
-    out = MVector{32, UInt8}(undef)
-    hmac_blake2s!(out, key, data)
+function hmac_blake2b(key::AbstractVector{UInt8}, data::AbstractVector{UInt8})::MVector{64, UInt8}
+    out = MVector{64, UInt8}(undef)
+    hmac_blake2b!(out, key, data)
     out
 end
 
 # ─── HKDF (RFC 5869 style, matching noise-c and noise-zig) ──────────────────
+# Noise with BLAKE2b: HASHLEN=64. Each HKDF output block is 64 bytes.
+# ck stays full HASHLEN (64); cipher keys are TRUNCATE(block, 32) per Noise §5.3.
 
 function hkdf2(chaining_key::AbstractVector{UInt8}, input_key_material::AbstractVector{UInt8})
-    # Extract
-    prk = hmac_blake2s(chaining_key, input_key_material)
-    # Expand: out1 = HMAC(prk, 0x01), out2 = HMAC(prk, out1 || 0x02)
-    out1 = hmac_blake2s(prk, MVector{1, UInt8}(0x01))
-    # Build out1 || 0x02
-    buf = MVector{33, UInt8}(undef)
-    @inbounds for i in 1:32; buf[i] = out1[i]; end
-    buf[33] = 0x02
-    out2 = hmac_blake2s(prk, buf)
+    prk = hmac_blake2b(chaining_key, input_key_material)
+    out1 = hmac_blake2b(prk, MVector{1, UInt8}(0x01))   # 64B — ck
+    buf = MVector{65, UInt8}(undef)
+    @inbounds for i in 1:64; buf[i] = out1[i]; end
+    buf[65] = 0x02
+    out2 = hmac_blake2b(prk, buf)                        # 64B — truncate to 32 for cipher key
     (out1=out1, out2=out2)
 end
 
 function hkdf3(chaining_key::AbstractVector{UInt8}, input_key_material::AbstractVector{UInt8})
-    prk = hmac_blake2s(chaining_key, input_key_material)
-    out1 = hmac_blake2s(prk, MVector{1, UInt8}(0x01))
-    buf = MVector{33, UInt8}(undef)
-    @inbounds for i in 1:32; buf[i] = out1[i]; end
-    buf[33] = 0x02
-    out2 = hmac_blake2s(prk, buf)
-    @inbounds for i in 1:32; buf[i] = out2[i]; end
-    buf[33] = 0x03
-    out3 = hmac_blake2s(prk, buf)
+    prk = hmac_blake2b(chaining_key, input_key_material)
+    out1 = hmac_blake2b(prk, MVector{1, UInt8}(0x01))
+    buf = MVector{65, UInt8}(undef)
+    @inbounds for i in 1:64; buf[i] = out1[i]; end
+    buf[65] = 0x02
+    out2 = hmac_blake2b(prk, buf)
+    @inbounds for i in 1:64; buf[i] = out2[i]; end
+    buf[65] = 0x03
+    out3 = hmac_blake2b(prk, buf)
     (out1=out1, out2=out2, out3=out3)
 end
 

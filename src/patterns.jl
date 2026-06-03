@@ -5,7 +5,7 @@
 @enum Token e s ee es se ss
 
 struct Descriptor{N_PRE_I, N_PRE_R, N_MSG}
-    protocol_name::NTuple{34, UInt8}  # max "Noise_XX_25519_ChaChaPoly_BLAKE2s" = 34 chars
+    protocol_name::NTuple{34, UInt8}  # max "Noise_XX_25519_ChaChaPoly_BLAKE2b" = 34 chars
     name_len::Int
     pre_i::NTuple{N_PRE_I, Token}
     pre_r::NTuple{N_PRE_R, Token}
@@ -32,28 +32,28 @@ end
 
 # IK: pre_i=[], pre_r=[s], msgs=[[e,es,s,ss], [e,ee,se]]
 const DESC_IK = Descriptor{0, 1, 2}(
-    _name_tuple("Noise_IK_25519_ChaChaPoly_BLAKE2s"), 34,
+    _name_tuple("Noise_IK_25519_ChaChaPoly_BLAKE2b"), 34,
     (), (s,),
     (_tok4(e, es, s, ss), _tok4(e, ee, se)),
     (4, 3))
 
 # KK: pre_i=[s], pre_r=[s], msgs=[[e,es,ss], [e,ee,se]]
 const DESC_KK = Descriptor{1, 1, 2}(
-    _name_tuple("Noise_KK_25519_ChaChaPoly_BLAKE2s"), 34,
+    _name_tuple("Noise_KK_25519_ChaChaPoly_BLAKE2b"), 34,
     (s,), (s,),
     (_tok4(e, es, ss), _tok4(e, ee, se)),
     (3, 3))
 
 # XX: pre_i=[], pre_r=[], msgs=[[e], [e,ee,s,es], [s,se]]
 const DESC_XX = Descriptor{0, 0, 3}(
-    _name_tuple("Noise_XX_25519_ChaChaPoly_BLAKE2s"), 34,
+    _name_tuple("Noise_XX_25519_ChaChaPoly_BLAKE2b"), 34,
     (), (),
     (_tok4(e), _tok4(e, ee, s, es), _tok4(s, se)),
     (1, 4, 2))
 
 # NX: pre_i=[], pre_r=[], msgs=[[e], [e,ee,s,es]]
 const DESC_NX = Descriptor{0, 0, 2}(
-    _name_tuple("Noise_NX_25519_ChaChaPoly_BLAKE2s"), 34,
+    _name_tuple("Noise_NX_25519_ChaChaPoly_BLAKE2b"), 34,
     (), (),
     (_tok4(e), _tok4(e, ee, s, es)),
     (1, 4))

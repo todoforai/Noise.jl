@@ -13,7 +13,7 @@ Fully implemented and tested.
 The codebase also includes some static-compilation-oriented design choices.
 For example, `src/types.jl` avoids `Union{Nothing, ...}` in a few places to stay friendlier to `StaticCompiler.jl`.
 
-- X25519 DH (libsodium), ChaCha20-Poly1305 AEAD (libsodium), BLAKE2s-256 (pure Julia), HMAC-BLAKE2s, HKDF
+- X25519 DH (libsodium), ChaCha20-Poly1305 AEAD (libsodium), BLAKE2b-512 (BLAKE2.jl), HMAC-BLAKE2b, HKDF
 - `CipherState`, `SymmetricState`, `HandshakeState`, `TransportState`
 - All four patterns: `IK`, `KK`, `XX`, `NX`
 - 21 passing test sets (matching noise-zig)
@@ -58,7 +58,7 @@ Mirrors the noise-zig source structure:
 |------------|---------------|-------------|
 | `src/types.jl` | `types.zig` | `Role`, `KeyPair`, `PublicKey`, `SecretKey` |
 | `src/constants.jl` | `constants.zig` | Protocol constants (key/hash/nonce lengths) |
-| `src/crypto.jl` | `crypto.zig` | BLAKE2s, HMAC, HKDF, X25519, ChaCha20-Poly1305 |
+| `src/crypto.jl` | `crypto.zig` | BLAKE2b, HMAC, HKDF, X25519, ChaCha20-Poly1305 |
 | `src/patterns.jl` | `patterns.zig` | Pattern descriptors for IK, KK, XX, NX |
 | `src/cipher_state.jl` | `cipher_state.zig` | AEAD encrypt/decrypt with nonce tracking |
 | `src/symmetric_state.jl` | `symmetric_state.zig` | Chaining key + handshake hash management |
@@ -67,8 +67,8 @@ Mirrors the noise-zig source structure:
 
 ## Crypto backends
 
-- **BLAKE2s-256**: Pure Julia (RFC 7693) — libsodium only provides BLAKE2b
-- **HMAC-BLAKE2s / HKDF**: Pure Julia (built on BLAKE2s, matching noise-c `hashstate.c`)
+- **BLAKE2b-512**: BLAKE2.jl (RFC 7693)
+- **HMAC-BLAKE2b / HKDF**: Pure Julia (built on BLAKE2b, matching noise-c `hashstate.c`)
 - **X25519**: libsodium via `ccall` (`crypto_scalarmult_curve25519`)
 - **ChaCha20-Poly1305 IETF**: libsodium via `ccall` (`crypto_aead_chacha20poly1305_ietf`)
 
